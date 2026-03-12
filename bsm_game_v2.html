@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>BSM Explorer — N(d1) & N(d2)</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #060910;
+    --panel: #0d1117;
+    --border: #1c2333;
+    --d1color: #f59e0b;
+    --d2color: #38bdf8;
+    --green: #4ade80;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --accent: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    text-align: center;
+    padding: 1.8rem 1rem 0.8rem;
+    position: relative; z-index: 1;
+  }
+  .header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(1.5rem, 3vw, 2.4rem);
+    letter-spacing: -0.02em; color: #fff;
+  }
+  .header .subtitle {
+    font-size: 0.85rem; color: #94a3b8;
+    font-family: 'DM Mono', monospace; font-weight: 300;
+    margin-top: 0.25rem;
+  }
+  .header .subtitle .d1 { color: var(--d1color); }
+  .header .subtitle .d2 { color: var(--d2color); }
+  .header .hint { color: var(--muted); font-size: 0.65rem; margin-top: 0.3rem; letter-spacing: 0.12em; }
+
+  /* ── WRAPPER ── */
+  .wrapper {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0.8rem 1.4rem 2rem;
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+
+  /* ── PANEL BASE ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
+  }
+  .panel-title {
+    font-size: 0.58rem;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 0.9rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.5rem;
+  }
+
+  /* ═══════════════════════════════════════════
+     THREE-COLUMN LAYOUT
+     Left (sliders) | Center (chart) | Right (values + insight)
+  ═══════════════════════════════════════════ */
+  .three-col {
+    display: grid;
+    grid-template-columns: 230px 1fr 280px;
+    grid-template-rows: auto;
+    gap: 1rem;
+    align-items: start;
+  }
+
+  /* ── LEFT: SLIDERS ── */
+  .left-panel {
+    grid-column: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .sliders-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .slider-row { margin-bottom: 0.05rem; }
+  .slider-row label {
+    display: flex; justify-content: space-between;
+    font-size: 0.68rem; color: var(--muted); margin-bottom: 0.3rem;
+  }
+  .slider-row label span { color: var(--text); font-weight: 500; }
+  input[type=range] {
+    width: 100%; -webkit-appearance: none;
+    height: 3px; border-radius: 4px;
+    background: var(--border); outline: none; cursor: pointer;
+    margin-bottom: 0.9rem;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--bg);
+    cursor: pointer; transition: transform 0.15s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.35); }
+  .formula-strip {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.6rem;
+    color: var(--muted);
+    line-height: 2;
+  }
+  .formula-strip .f-d1 { color: var(--d1color); }
+  .formula-strip .f-d2 { color: var(--d2color); }
+
+  /* ── CENTER: CHART ── */
+  .chart-panel {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+  .chart-top {
+    display: flex; justify-content: space-between;
+    align-items: center; flex-wrap: wrap; gap: 0.5rem;
+  }
+  .chart-tabs { display: flex; gap: 0.35rem; }
+  .tab-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.62rem; padding: 0.32rem 0.8rem;
+    border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted);
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.04em;
+  }
+  .tab-btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+  .tab-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+  #mainChart { width: 100% !important; border-radius: 8px; display: block; flex: 1; }
+  .chart-legend { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 0.32rem; font-size: 0.6rem; color: var(--muted); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── RIGHT: stacked panels (Computed Values on top, Insight below) ── */
+  .right-panel {
+    grid-column: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* Computed values grid */
+  .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
+  .result-card {
+    border-radius: 10px; padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border);
+    transition: border-color 0.2s;
+  }
+  .result-card.d1 { border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.05); }
+  .result-card.d2 { border-color: rgba(56,189,248,0.45); background: rgba(56,189,248,0.05); }
+  .rc-label { font-size: 0.56rem; color: var(--muted); letter-spacing: 0.1em; margin-bottom: 0.2rem; }
+  .rc-val { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+  .result-card.d1 .rc-val { color: var(--d1color); }
+  .result-card.d2 .rc-val { color: var(--d2color); }
+  .rc-sub { font-size: 0.55rem; color: var(--muted); margin-top: 0.12rem; line-height: 1.4; }
+
+  .price-card {
+    background: rgba(74,222,128,0.05);
+    border: 1px solid rgba(74,222,128,0.3);
+    border-radius: 10px; padding: 0.75rem 0.9rem;
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 0.55rem;
+  }
+  .pc-label { font-size: 0.56rem; color: var(--muted); letter-spacing: 0.1em; }
+  .pc-sub { font-size: 0.52rem; color: var(--muted); margin-top: 0.1rem; }
+  .pc-val { font-size: 1.55rem; font-weight: 700; color: var(--green); }
+
+  /* Insight box — natural height, no stretching */
+  .insight {
+    background: #0b1520;
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    font-size: 0.69rem;
+    line-height: 1.9;
+    color: #94a3b8;
+  }
+  .insight strong { color: var(--text); }
+  .insight .tag {
+    display: inline-block; padding: 0.1rem 0.45rem;
+    border-radius: 4px; font-size: 0.6rem; font-weight: 600; margin: 0 2px;
+  }
+  .insight .tag.d1 { background: rgba(245,158,11,0.18); color: var(--d1color); }
+  .insight .tag.d2 { background: rgba(56,189,248,0.18); color: var(--d2color); }
+
+  /* ═══════════════════════════════════════════
+     SCENARIO SECTION — full width below the 3 cols
+  ═══════════════════════════════════════════ */
+  .scenario-section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.2rem 1.4rem 1.5rem;
+  }
+  .scenario-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 0.2rem;
+  }
+  .scenario-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.05rem; color: #fff;
+  }
+  .scenario-hint { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.06em; }
+  .scenario-subdesc {
+    font-size: 0.65rem; color: var(--muted); margin-bottom: 1rem; line-height: 1.6;
+  }
+  .scenarios {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.8rem;
+  }
+  .scenario-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1rem 1.1rem;
+    cursor: pointer;
+    transition: all 0.22s ease;
+    position: relative;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    min-height: 150px;
+    background: #0a0f1a;
+  }
+  .scenario-card::after {
+    content: '';
+    position: absolute; inset: 0; border-radius: 12px;
+    opacity: 0; transition: opacity 0.22s;
+    background: radial-gradient(ellipse at 50% 0%, rgba(245,158,11,0.09) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .scenario-card:hover {
+    border-color: rgba(245,158,11,0.6);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(245,158,11,0.1);
+  }
+  .scenario-card:hover::after { opacity: 1; }
+  .scenario-card.active {
+    border-color: var(--accent);
+    background: rgba(245,158,11,0.07);
+    box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .scenario-card.active::after { opacity: 1; }
+
+  .sc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+  .sc-emoji { font-size: 1.4rem; line-height: 1; }
+  .sc-badge {
+    font-size: 0.54rem; padding: 0.14rem 0.4rem; border-radius: 4px;
+    background: rgba(245,158,11,0.15); color: var(--accent);
+    letter-spacing: 0.07em; font-weight: 600; white-space: nowrap;
+  }
+  .sc-name { font-size: 0.72rem; color: var(--text); font-weight: 700; margin-bottom: 0.3rem; }
+  .sc-desc { font-size: 0.62rem; color: var(--muted); line-height: 1.55; flex: 1; }
+  .sc-live {
+    margin-top: 0.65rem; padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 0.5rem;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .scenario-card.active .sc-live { opacity: 1; }
+  .sc-live-item { font-size: 0.56rem; }
+  .sc-live-item .slv { font-weight: 700; }
+  .sc-live-item .sll { color: var(--muted); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 1100px) {
+    .three-col { grid-template-columns: 210px 1fr 260px; }
+  }
+  @media (max-width: 860px) {
+    .three-col {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+    }
+    .left-panel  { grid-column: 1; grid-row: 1; }
+    .chart-panel { grid-column: 1 / -1; grid-row: 2; }
+    .right-panel { grid-column: 2; grid-row: 1; }
+    .scenarios { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 580px) {
+    .three-col { grid-template-columns: 1fr; }
+    .left-panel, .right-panel { grid-column: 1; grid-row: auto; }
+    .chart-panel { grid-column: 1; }
+    .scenarios { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Black-Scholes Explorer</h1>
+  <div class="subtitle">
+    Understanding <span class="d1">N(d1)</span> &amp; <span class="d2">N(d2)</span>
+  </div>
+  <div class="hint">DRAG SLIDERS · WATCH THE CURVE · FEEL THE INTUITION</div>
+</div>
+
+<div class="wrapper">
+
+  <!-- ══════════════════════════════════════
+       THREE-COLUMN ROW
+  ══════════════════════════════════════ -->
+  <div class="three-col">
+
+    <!-- ── LEFT: SLIDERS ── -->
+    <div class="panel left-panel">
+      <div class="panel-title">Option Parameters</div>
+      <div class="sliders-body">
+        <div>
+          <div class="slider-row">
+            <label>Stock Price (S) <span id="lS">$100</span></label>
+            <input type="range" id="sS" min="50" max="200" value="100" step="1"/>
+          </div>
+          <div class="slider-row">
+            <label>Strike Price (K) <span id="lK">$100</span></label>
+            <input type="range" id="sK" min="50" max="200" value="100" step="1"/>
+          </div>
+          <div class="slider-row">
+            <label>Volatility σ <span id="lV">20%</span></label>
+            <input type="range" id="sV" min="5" max="80" value="20" step="1"/>
+          </div>
+          <div class="slider-row">
+            <label>Time to Expiry <span id="lT">1.00 yr</span></label>
+            <input type="range" id="sT" min="1" max="36" value="12" step="1"/>
+          </div>
+          <div class="slider-row">
+            <label>Risk-free Rate <span id="lR">5.0%</span></label>
+            <input type="range" id="sR" min="0" max="15" value="5" step="0.5"/>
+          </div>
+        </div>
+        <div class="formula-strip">
+          C = S · <span class="f-d1">N(d1)</span> − K·e<sup>−rT</sup> · <span class="f-d2">N(d2)</span><br/>
+          d1 = [ln(S/K) + (r + σ²/2)T] / σ√T<br/>
+          d2 = d1 − σ√T
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CENTER: VISUALIZATION CHART ── -->
+    <div class="panel chart-panel">
+      <div class="chart-top">
+        <div class="panel-title" style="margin:0;border:none;padding:0;">Visualisation</div>
+        <div class="chart-tabs">
+          <button class="tab-btn active" onclick="setTab('normal')">Normal Curve</button>
+          <button class="tab-btn" onclick="setTab('delta')">Delta vs S</button>
+          <button class="tab-btn" onclick="setTab('prob')">Prob vs σ</button>
+        </div>
+      </div>
+      <canvas id="mainChart"></canvas>
+      <div class="chart-legend" id="chartLegend"></div>
+    </div>
+
+    <!-- ── RIGHT: COMPUTED VALUES (top) + INSIGHT (below) ── -->
+    <div class="right-panel">
+
+      <!-- Computed Values panel -->
+      <div class="panel" style="flex-shrink:0;">
+        <div class="panel-title">Computed Values</div>
+        <div class="results-grid">
+          <div class="result-card d1">
+            <div class="rc-label">d1</div>
+            <div class="rc-val" id="vd1">—</div>
+            <div class="rc-sub">z-score</div>
+          </div>
+          <div class="result-card d2">
+            <div class="rc-label">d2</div>
+            <div class="rc-val" id="vd2">—</div>
+            <div class="rc-sub">z-score</div>
+          </div>
+          <div class="result-card d1">
+            <div class="rc-label">N(d1) = Δ</div>
+            <div class="rc-val" id="vNd1">—</div>
+            <div class="rc-sub">hedge ratio</div>
+          </div>
+          <div class="result-card d2">
+            <div class="rc-label">N(d2)</div>
+            <div class="rc-val" id="vNd2">—</div>
+            <div class="rc-sub">prob. ITM</div>
+          </div>
+        </div>
+        <div class="price-card">
+          <div>
+            <div class="pc-label">CALL PRICE (BSM)</div>
+            <div class="pc-sub">S·N(d1) − Ke⁻ʳᵀ·N(d2)</div>
+          </div>
+          <div class="pc-val" id="vCall">—</div>
+        </div>
+      </div>
+
+      <!-- What's happening right now — grows to fill remaining height -->
+      <div class="insight" id="insightBox">
+        Move the sliders to begin exploring...
+      </div>
+
+    </div><!-- end right-panel -->
+
+  </div><!-- end three-col -->
+
+  <!-- ══════════════════════════════════════
+       SCENARIO SECTION — full width below
+  ══════════════════════════════════════ -->
+  <div class="scenario-section">
+    <div class="scenario-header">
+      <div class="scenario-title">🎮 Scenario Explorer</div>
+      <div class="scenario-hint">CLICK TO LOAD</div>
+    </div>
+    <div class="scenario-subdesc">
+      Instantly load a real-world scenario and see how
+      <span style="color:var(--d1color)">N(d1)</span> and
+      <span style="color:var(--d2color)">N(d2)</span> respond.
+    </div>
+    <div class="scenarios">
+
+      <div class="scenario-card" onclick="loadScenario(0)" id="sc0">
+        <div class="sc-top"><div class="sc-emoji">⚖️</div><div class="sc-badge">ATM</div></div>
+        <div class="sc-name">At The Money</div>
+        <div class="sc-desc">Stock equals strike. Classic 50/50 — N(d2) ≈ 0.5, equal chance of profit or loss.</div>
+        <div class="sc-live">
+          <div class="sc-live-item"><div class="slv" style="color:var(--d2color)" id="sc0-nd2">—</div><div class="sll">N(d2)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--d1color)" id="sc0-nd1">—</div><div class="sll">N(d1)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--green)"   id="sc0-call">—</div><div class="sll">Price</div></div>
+        </div>
+      </div>
+
+      <div class="scenario-card" onclick="loadScenario(1)" id="sc1">
+        <div class="sc-top"><div class="sc-emoji">🚀</div><div class="sc-badge">ITM</div></div>
+        <div class="sc-name">Deep In Money</div>
+        <div class="sc-desc">Stock far above strike. Both N(d1) and N(d2) approach 1.0 — near certainty of profit.</div>
+        <div class="sc-live">
+          <div class="sc-live-item"><div class="slv" style="color:var(--d2color)" id="sc1-nd2">—</div><div class="sll">N(d2)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--d1color)" id="sc1-nd1">—</div><div class="sll">N(d1)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--green)"   id="sc1-call">—</div><div class="sll">Price</div></div>
+        </div>
+      </div>
+
+      <div class="scenario-card" onclick="loadScenario(2)" id="sc2">
+        <div class="sc-top"><div class="sc-emoji">📉</div><div class="sc-badge">OTM</div></div>
+        <div class="sc-name">Deep Out Money</div>
+        <div class="sc-desc">Stock far below strike. Both values collapse toward 0 — option nearly worthless.</div>
+        <div class="sc-live">
+          <div class="sc-live-item"><div class="slv" style="color:var(--d2color)" id="sc2-nd2">—</div><div class="sll">N(d2)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--d1color)" id="sc2-nd1">—</div><div class="sll">N(d1)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--green)"   id="sc2-call">—</div><div class="sll">Price</div></div>
+        </div>
+      </div>
+
+      <div class="scenario-card" onclick="loadScenario(3)" id="sc3">
+        <div class="sc-top"><div class="sc-emoji">🌪️</div><div class="sc-badge">HIGH σ</div></div>
+        <div class="sc-name">High Volatility</div>
+        <div class="sc-desc">Very volatile stock. d1−d2 gap widens dramatically. Premium explodes with uncertainty.</div>
+        <div class="sc-live">
+          <div class="sc-live-item"><div class="slv" style="color:var(--d2color)" id="sc3-nd2">—</div><div class="sll">N(d2)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--d1color)" id="sc3-nd1">—</div><div class="sll">N(d1)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--green)"   id="sc3-call">—</div><div class="sll">Price</div></div>
+        </div>
+      </div>
+
+      <div class="scenario-card" onclick="loadScenario(4)" id="sc4">
+        <div class="sc-top"><div class="sc-emoji">⏳</div><div class="sc-badge">SHORT T</div></div>
+        <div class="sc-name">Expiry Tomorrow</div>
+        <div class="sc-desc">Almost no time left. d1 and d2 converge tightly. Time value collapses to near zero.</div>
+        <div class="sc-live">
+          <div class="sc-live-item"><div class="slv" style="color:var(--d2color)" id="sc4-nd2">—</div><div class="sll">N(d2)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--d1color)" id="sc4-nd1">—</div><div class="sll">N(d1)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--green)"   id="sc4-call">—</div><div class="sll">Price</div></div>
+        </div>
+      </div>
+
+      <div class="scenario-card" onclick="loadScenario(5)" id="sc5">
+        <div class="sc-top"><div class="sc-emoji">🗓️</div><div class="sc-badge">LEAPS</div></div>
+        <div class="sc-name">Long Dated</div>
+        <div class="sc-desc">2 years to expiry. Large d1−d2 gap. Massive time value embedded in the premium.</div>
+        <div class="sc-live">
+          <div class="sc-live-item"><div class="slv" style="color:var(--d2color)" id="sc5-nd2">—</div><div class="sll">N(d2)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--d1color)" id="sc5-nd1">—</div><div class="sll">N(d1)</div></div>
+          <div class="sc-live-item"><div class="slv" style="color:var(--green)"   id="sc5-call">—</div><div class="sll">Price</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- end wrapper -->
+
+<script>
+// ── MATH ──────────────────────────────────────────────────────────
+function erf(x){
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const sign=x<0?-1:1; x=Math.abs(x);
+  const t=1/(1+p*x);
+  const y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return sign*y;
+}
+function normCDF(x){ return 0.5*(1+erf(x/Math.sqrt(2))); }
+function normPDF(x){ return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
+function calcBSM(S,K,r,sigma,T){
+  if(T<=0)T=0.0001;
+  const d1=(Math.log(S/K)+(r+0.5*sigma*sigma)*T)/(sigma*Math.sqrt(T));
+  const d2=d1-sigma*Math.sqrt(T);
+  const Nd1=normCDF(d1), Nd2=normCDF(d2);
+  const call=S*Nd1-K*Math.exp(-r*T)*Nd2;
+  return {d1,d2,Nd1,Nd2,call};
+}
+
+// ── STATE ─────────────────────────────────────────────────────────
+let state={S:100,K:100,sigma:0.20,T:1.0,r:0.05};
+let currentTab='normal';
+
+// ── SCENARIOS ─────────────────────────────────────────────────────
+const scenarioDefs=[
+  {S:100,K:100,V:20,T:12,R:5},
+  {S:150,K:100,V:20,T:12,R:5},
+  {S:70, K:100,V:20,T:12,R:5},
+  {S:100,K:100,V:60,T:12,R:5},
+  {S:100,K:100,V:20,T:1, R:5},
+  {S:100,K:100,V:20,T:24,R:5},
+];
+function precomputeScenarios(){
+  scenarioDefs.forEach((sc,i)=>{
+    const {Nd1,Nd2,call}=calcBSM(sc.S,sc.K,sc.R/100,sc.V/100,sc.T/12);
+    document.getElementById(`sc${i}-nd1`).textContent=Nd1.toFixed(2);
+    document.getElementById(`sc${i}-nd2`).textContent=Nd2.toFixed(2);
+    document.getElementById(`sc${i}-call`).textContent=`$${call.toFixed(1)}`;
+  });
+}
+function loadScenario(i){
+  document.querySelectorAll('.scenario-card').forEach((c,j)=>c.classList.toggle('active',j===i));
+  const sc=scenarioDefs[i];
+  sliders.S.value=sc.S; sliders.K.value=sc.K;
+  sliders.V.value=sc.V; sliders.T.value=sc.T; sliders.R.value=sc.R;
+  readSliders(); update();
+}
+
+// ── SLIDERS ───────────────────────────────────────────────────────
+const sliders={
+  S:document.getElementById('sS'), K:document.getElementById('sK'),
+  V:document.getElementById('sV'), T:document.getElementById('sT'),
+  R:document.getElementById('sR')
+};
+function readSliders(){
+  state.S=+sliders.S.value; state.K=+sliders.K.value;
+  state.sigma=sliders.V.value/100; state.T=sliders.T.value/12; state.r=sliders.R.value/100;
+  document.getElementById('lS').textContent=`$${state.S}`;
+  document.getElementById('lK').textContent=`$${state.K}`;
+  document.getElementById('lV').textContent=`${sliders.V.value}%`;
+  document.getElementById('lT').textContent=`${state.T.toFixed(2)} yr`;
+  document.getElementById('lR').textContent=`${(+sliders.R.value).toFixed(1)}%`;
+}
+Object.values(sliders).forEach(s=>s.addEventListener('input',()=>{readSliders();update();}));
+
+// ── UPDATE ────────────────────────────────────────────────────────
+function update(){
+  const {S,K,sigma,T,r}=state;
+  const {d1,d2,Nd1,Nd2,call}=calcBSM(S,K,r,sigma,T);
+  document.getElementById('vd1').textContent=d1.toFixed(3);
+  document.getElementById('vd2').textContent=d2.toFixed(3);
+  document.getElementById('vNd1').textContent=Nd1.toFixed(3);
+  document.getElementById('vNd2').textContent=Nd2.toFixed(3);
+  document.getElementById('vCall').textContent=`$${call.toFixed(2)}`;
+  updateInsight(d1,d2,Nd1,Nd2,S,K);
+  drawChart();
+}
+
+// ── INSIGHT ───────────────────────────────────────────────────────
+function updateInsight(d1,d2,Nd1,Nd2,S,K){
+  const m=S>K?'in the money 🟢':S<K?'out of the money 🔴':'at the money ⚖️';
+  const gap=Math.abs(d1-d2).toFixed(3);
+  document.getElementById('insightBox').innerHTML=`
+    <strong>💡 What's happening right now?</strong><br/><br/>
+    Option is <strong>${m}</strong><br/><br/>
+    <span class="tag d2">N(d2) = ${(Nd2*100).toFixed(0)}%</span>
+    There's a <strong>${(Nd2*100).toFixed(0)}% chance</strong> the stock finishes above the strike — <em>probability of profit</em>.<br/><br/>
+    <span class="tag d1">N(d1) = ${(Nd1*100).toFixed(0)}%</span>
+    If the stock moves <strong>$1 up</strong>, the option gains ~<strong>$${Nd1.toFixed(2)}</strong> — your <em>Delta</em>.<br/><br/>
+    Gap d1−d2 = <strong>${gap}</strong><br/>(= σ×√T = ${(state.sigma*Math.sqrt(state.T)).toFixed(3)}).<br/>
+    Higher vol or more time → bigger gap.
+  `;
+}
+
+// ── CHART ─────────────────────────────────────────────────────────
+function setTab(tab){
+  currentTab=tab;
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    b.classList.toggle('active',['normal','delta','prob'][i]===tab);
+  });
+  drawChart();
+}
+
+function drawChart(){
+  const canvas=document.getElementById('mainChart');
+  const dpr=window.devicePixelRatio||1;
+  const H=320;
+  const W=canvas.parentElement.clientWidth-32;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.fillStyle='#0a0e18'; ctx.fillRect(0,0,W,H);
+  if(currentTab==='normal') drawNormal(ctx,W,H);
+  else if(currentTab==='delta') drawDelta(ctx,W,H);
+  else drawProb(ctx,W,H);
+}
+
+function drawNormal(ctx,W,H){
+  const {S,K,sigma,T,r}=state;
+  const {d1,d2}=calcBSM(S,K,r,sigma,T);
+  const pL=50,pR=18,pT=24,pB=34;
+  const pw=W-pL-pR, ph=H-pT-pB;
+  const xMin=-4,xMax=4,yMax=0.42;
+  const sx=x=>pL+((x-xMin)/(xMax-xMin))*pw;
+  const sy=y=>pT+ph-(y/yMax)*ph;
+
+  ctx.strokeStyle='#1c2333';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  for(let x=-3;x<=3;x++){ctx.beginPath();ctx.moveTo(sx(x),pT);ctx.lineTo(sx(x),pT+ph);ctx.stroke();}
+  ctx.setLineDash([]);
+
+  // N(d1) amber fill
+  ctx.beginPath();ctx.moveTo(sx(xMin),sy(0));
+  for(let i=0;i<=300;i++){const x=xMin+(i/300)*(Math.min(d1,xMax)-xMin);ctx.lineTo(sx(x),sy(normPDF(x)));}
+  ctx.lineTo(sx(Math.min(d1,xMax)),sy(0));ctx.closePath();
+  ctx.fillStyle='rgba(245,158,11,0.10)';ctx.fill();
+
+  // N(d2) blue fill
+  ctx.beginPath();ctx.moveTo(sx(xMin),sy(0));
+  for(let i=0;i<=300;i++){const x=xMin+(i/300)*(Math.min(d2,xMax)-xMin);ctx.lineTo(sx(x),sy(normPDF(x)));}
+  ctx.lineTo(sx(Math.min(d2,xMax)),sy(0));ctx.closePath();
+  ctx.fillStyle='rgba(56,189,248,0.22)';ctx.fill();
+
+  // Bell curve
+  ctx.beginPath();
+  for(let i=0;i<=400;i++){const x=xMin+(i/400)*(xMax-xMin);i===0?ctx.moveTo(sx(x),sy(normPDF(x))):ctx.lineTo(sx(x),sy(normPDF(x)));}
+  ctx.strokeStyle='#e2e8f0';ctx.lineWidth=2.2;ctx.stroke();
+
+  // d2 line
+  if(d2>=xMin&&d2<=xMax){
+    ctx.beginPath();ctx.moveTo(sx(d2),pT);ctx.lineTo(sx(d2),pT+ph);
+    ctx.strokeStyle='#38bdf8';ctx.lineWidth=2;ctx.setLineDash([5,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#38bdf8';ctx.font='bold 10px DM Mono,monospace';ctx.textAlign='center';
+    ctx.fillText(`d2=${d2.toFixed(2)}`,sx(d2),pT+12);
+  }
+  // d1 line
+  if(d1>=xMin&&d1<=xMax){
+    ctx.beginPath();ctx.moveTo(sx(d1),pT);ctx.lineTo(sx(d1),pT+ph);
+    ctx.strokeStyle='#f59e0b';ctx.lineWidth=2;ctx.setLineDash([5,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#f59e0b';ctx.font='bold 10px DM Mono,monospace';ctx.textAlign='center';
+    ctx.fillText(`d1=${d1.toFixed(2)}`,sx(d1),pT+24);
+  }
+
+  ctx.beginPath();ctx.moveTo(pL,pT+ph);ctx.lineTo(pL+pw,pT+ph);ctx.strokeStyle='#334155';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.font='11px DM Mono,monospace';ctx.textAlign='center';
+  for(let x=-3;x<=3;x++) ctx.fillText(x===0?'0':x+'σ',sx(x),pT+ph+18);
+  ctx.font='10px DM Mono,monospace';ctx.textAlign='left';
+  ctx.fillStyle='#38bdf8';ctx.fillText(`N(d2)=${normCDF(d2).toFixed(3)}`,pL+4,pT+ph-10);
+  ctx.fillStyle='#f59e0b';ctx.fillText(`N(d1)=${normCDF(d1).toFixed(3)}`,pL+4,pT+ph-24);
+
+  document.getElementById('chartLegend').innerHTML=`
+    <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div>N(d2) = blue area = P(profit at expiry)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>N(d1) = amber+blue area = Delta (hedge ratio)</div>
+  `;
+}
+
+function drawDelta(ctx,W,H){
+  const {K,sigma,T,r}=state;
+  const pL=50,pR=18,pT=24,pB=34;
+  const pw=W-pL-pR, ph=H-pT-pB;
+  const sMin=K*0.4,sMax=K*1.8;
+  const sx=s=>pL+((s-sMin)/(sMax-sMin))*pw;
+  const sy=v=>pT+ph*(1-v);
+
+  ctx.strokeStyle='#1c2333';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  for(let v=0;v<=1;v+=0.25){ctx.beginPath();ctx.moveTo(pL,sy(v));ctx.lineTo(pL+pw,sy(v));ctx.stroke();}
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  for(let i=0;i<=300;i++){const s=sMin+(i/300)*(sMax-sMin);const {Nd1}=calcBSM(s,K,r,sigma,T);i===0?ctx.moveTo(sx(s),sy(Nd1)):ctx.lineTo(sx(s),sy(Nd1));}
+  ctx.strokeStyle='#f59e0b';ctx.lineWidth=2.5;ctx.stroke();
+
+  const {Nd1:cur}=calcBSM(state.S,K,r,sigma,T);
+  const cx=sx(state.S),cy=sy(cur);
+  ctx.beginPath();ctx.arc(cx,cy,6,0,Math.PI*2);ctx.fillStyle='#f59e0b';ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#f59e0b';ctx.font='bold 10px DM Mono,monospace';ctx.textAlign='left';
+  ctx.fillText(`Δ=${cur.toFixed(3)}  S=$${state.S}`,cx+10,cy-5);
+
+  ctx.beginPath();ctx.moveTo(sx(K),pT);ctx.lineTo(sx(K),pT+ph);
+  ctx.strokeStyle='#4ade80';ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#4ade80';ctx.font='10px DM Mono,monospace';ctx.textAlign='center';
+  ctx.fillText(`K=$${K}`,sx(K),pT+12);
+
+  ctx.beginPath();ctx.moveTo(pL,pT+ph);ctx.lineTo(pL+pw,pT+ph);ctx.strokeStyle='#334155';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.font='10px DM Mono,monospace';ctx.textAlign='right';
+  [0,0.25,0.5,0.75,1].forEach(v=>ctx.fillText(v.toFixed(2),pL-5,sy(v)+4));
+  ctx.textAlign='center';
+  for(let s=Math.ceil(sMin/20)*20;s<=sMax;s+=20) ctx.fillText('$'+s,sx(s),pT+ph+18);
+
+  document.getElementById('chartLegend').innerHTML=`
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>N(d1) = Delta — option gains this much per $1 stock move</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div>Strike K</div>
+  `;
+}
+
+function drawProb(ctx,W,H){
+  const {S,K,T,r}=state;
+  const pL=50,pR=18,pT=24,pB=34;
+  const pw=W-pL-pR, ph=H-pT-pB;
+  const vMin=0.02,vMax=0.80;
+  const sx=v=>pL+((v-vMin)/(vMax-vMin))*pw;
+  const sy=p=>pT+ph*(1-p);
+
+  ctx.strokeStyle='#1c2333';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  for(let p=0;p<=1;p+=0.25){ctx.beginPath();ctx.moveTo(pL,sy(p));ctx.lineTo(pL+pw,sy(p));ctx.stroke();}
+  ctx.setLineDash([]);
+
+  const vArr=Array.from({length:200},(_,i)=>vMin+(i/199)*(vMax-vMin));
+  ctx.beginPath();
+  vArr.forEach((v,i)=>{const {Nd1}=calcBSM(S,K,r,v,T);i===0?ctx.moveTo(sx(v),sy(Nd1)):ctx.lineTo(sx(v),sy(Nd1));});
+  vArr.slice().reverse().forEach(v=>{const {Nd2}=calcBSM(S,K,r,v,T);ctx.lineTo(sx(v),sy(Nd2));});
+  ctx.closePath();ctx.fillStyle='rgba(245,158,11,0.07)';ctx.fill();
+
+  ctx.beginPath();
+  for(let i=0;i<=300;i++){const v=vMin+(i/300)*(vMax-vMin);const {Nd2}=calcBSM(S,K,r,v,T);i===0?ctx.moveTo(sx(v),sy(Nd2)):ctx.lineTo(sx(v),sy(Nd2));}
+  ctx.strokeStyle='#38bdf8';ctx.lineWidth=2.5;ctx.stroke();
+
+  ctx.beginPath();
+  for(let i=0;i<=300;i++){const v=vMin+(i/300)*(vMax-vMin);const {Nd1}=calcBSM(S,K,r,v,T);i===0?ctx.moveTo(sx(v),sy(Nd1)):ctx.lineTo(sx(v),sy(Nd1));}
+  ctx.strokeStyle='#f59e0b';ctx.lineWidth=2.5;ctx.stroke();
+
+  const {Nd1:cNd1,Nd2:cNd2}=calcBSM(S,K,r,state.sigma,T);
+  [['#f59e0b',cNd1],['#38bdf8',cNd2]].forEach(([col,val])=>{
+    ctx.beginPath();ctx.arc(sx(state.sigma),sy(val),5,0,Math.PI*2);
+    ctx.fillStyle=col;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+  });
+  ctx.fillStyle='#94a3b8';ctx.font='10px DM Mono,monospace';ctx.textAlign='left';
+  ctx.fillText(`σ=${(state.sigma*100).toFixed(0)}%`,sx(state.sigma)+8,sy(cNd1)-4);
+
+  ctx.beginPath();ctx.moveTo(pL,pT+ph);ctx.lineTo(pL+pw,pT+ph);ctx.strokeStyle='#334155';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.font='10px DM Mono,monospace';ctx.textAlign='right';
+  [0,0.25,0.5,0.75,1].forEach(v=>ctx.fillText(v.toFixed(2),pL-5,sy(v)+4));
+  ctx.textAlign='center';
+  for(let v=0.1;v<=0.8;v+=0.1) ctx.fillText((v*100).toFixed(0)+'%',sx(v),pT+ph+18);
+
+  document.getElementById('chartLegend').innerHTML=`
+    <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div>N(d2) — prob. of finishing ITM</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div>N(d1) — always ≥ N(d2); gap = σ×√T</div>
+  `;
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+readSliders();
+update();
+precomputeScenarios();
+window.addEventListener('resize', drawChart);
+</script>
+</body>
+</html>
